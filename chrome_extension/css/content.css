@@ -1,0 +1,11 @@
+.yt-rag-highlight {
+    background-color: rgba(255, 255, 0, 0.3);
+    border-radius: 2px;
+    padding: 2px;
+}
+
+.yt-rag-timestamp {
+    color: #065fd4;
+    cursor: pointer;
+    text-decoration: underline;
+} 

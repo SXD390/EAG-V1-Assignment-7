@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>YouTube Transcript Indexer</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/marked/marked.min.css">
+  <style>
+    body {
+      width: 450px;
+      min-height: 500px;
+      padding: 20px;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e6e6e6;
+      margin: 0;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .header {
+      text-align: center;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .header h2 {
+      margin: 0;
+      background: linear-gradient(45deg, #ff4d4d, #f9cb28);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      font-size: 24px;
+    }
+
+    .section {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 20px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .section h3 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      color: #fff;
+      font-size: 18px;
+    }
+
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+
+    #indexButton {
+      background: linear-gradient(45deg, #ff4d4d, #f9cb28);
+      color: white;
+      width: 100%;
+    }
+
+    #indexButton:disabled {
+      background: linear-gradient(45deg, #666, #999);
+      cursor: not-allowed;
+    }
+
+    #searchButton {
+      background: linear-gradient(45deg, #4d79ff, #28c7f9);
+      color: white;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    input[type="text"] {
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      font-size: 14px;
+    }
+
+    input[type="text"]::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 15px;
+      display: none;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    .success {
+      background: linear-gradient(45deg, rgba(40, 167, 69, 0.2), rgba(40, 167, 69, 0.1));
+      border: 1px solid rgba(40, 167, 69, 0.2);
+      color: #98ff98;
+    }
+
+    .error {
+      background: linear-gradient(45deg, rgba(220, 53, 69, 0.2), rgba(220, 53, 69, 0.1));
+      border: 1px solid rgba(220, 53, 69, 0.2);
+      color: #ffb3b3;
+    }
+
+    .results {
+      margin-top: 20px;
+    }
+
+    .answer {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #e6e6e6;
+    }
+
+    .source {
+      margin-top: 10px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+    }
+
+    .source a {
+      color: #4d79ff;
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    .source a:hover {
+      text-decoration: underline;
+    }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, 
+        rgba(255,255,255,0) 0%, 
+        rgba(255,255,255,0.1) 50%, 
+        rgba(255,255,255,0) 100%);
+      margin: 20px 0;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      margin: 20px auto;
+      border: 3px solid transparent;
+      border-radius: 50%;
+      border-top-color: #4d79ff;
+      border-bottom-color: #f9cb28;
+      animation: spin 1s linear infinite;
+      display: none;
+    }
+
+    .waiting-message {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.6);
+      font-style: italic;
+      margin: 20px 0;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Markdown Styling */
+    .markdown-body {
+      color: #e6e6e6;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .markdown-body code {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Consolas', monospace;
+    }
+
+    .markdown-body pre {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid #4d79ff;
+      margin: 0;
+      padding-left: 15px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>YouTube Transcript Indexer</h2>
+    </div>
+
+    <div class="section">
+      <h3>Index Video</h3>
+      <button id="indexButton" disabled>Index Current Video</button>
+      <div id="indexStatus" class="status"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section">
+      <h3>Search Indexed Videos</h3>
+      <input type="text" id="searchQuery" placeholder="Ask anything about the indexed videos...">
+      <button id="searchButton">Search</button>
+      <div id="searchStatus" class="status"></div>
+      <div class="spinner" id="searchSpinner"></div>
+      <div class="waiting-message" id="waitingMessage">Processing your query...</div>
+      <div id="results" class="results markdown-body"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+  <script src="js/popup.js"></script>
+</body>
+</html> 

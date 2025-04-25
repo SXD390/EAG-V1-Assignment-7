@@ -1,0 +1,41 @@
+/* Basic syntax highlighting styles */
+.highlighted {
+  display: block;
+  padding: 1em;
+  color: #e6e6e6;
+  background: #1a1a2e;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.string {
+  color: #98c379;
+}
+
+.number {
+  color: #d19a66;
+}
+
+.keyword {
+  color: #c678dd;
+}
+
+.comment {
+  color: #5c6370;
+  font-style: italic;
+}
+
+/* Code block container */
+pre {
+  background: #1a1a2e;
+  border-radius: 6px;
+  margin: 1em 0;
+}
+
+/* Inline code */
+code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
+  color: #e6e6e6;
+} 

@@ -35,6 +35,43 @@ document.addEventListener('DOMContentLoaded', () => {
         gfm: true
     });
     
+    // Load saved query if exists
+    chrome.storage.local.get(['savedQuery'], (result) => {
+        if (result.savedQuery) {
+            searchQuery.value = result.savedQuery;
+            console.log('[YT-RAG] Loaded saved query:', result.savedQuery);
+        }
+    });
+    
+    // Save query as user types
+    searchQuery.addEventListener('input', () => {
+        const query = searchQuery.value;
+        chrome.storage.local.set({ savedQuery: query }, () => {
+            console.log('[YT-RAG] Saved query:', query);
+        });
+    });
+    
+    // Check if there's an ongoing indexing operation
+    chrome.storage.local.get(['ongoingOperation'], (result) => {
+        if (result.ongoingOperation) {
+            console.log('[YT-RAG] Found ongoing operation:', result.ongoingOperation);
+            // Resume status checking
+            statusCheckInterval = setInterval(() => {
+                checkIndexingStatus(result.ongoingOperation.id);
+            }, 2000);
+            
+            // Disable index button while operation is in progress
+            indexButton.disabled = true;
+            
+            // Show last known status if available
+            if (result.ongoingOperation.lastStatus) {
+                updateStatusUI(result.ongoingOperation.lastStatus);
+            } else {
+                showStatus(indexStatus, "Checking operation status...", "pending");
+            }
+        }
+    });
+    
     // Check if current page is a video
     console.log('[YT-RAG] Querying active tab');
     chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
@@ -50,9 +87,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = currentTab.url;
         if (url && url.includes('youtube.com/watch')) {
             console.log('[YT-RAG] Valid video detected, enabling button');
-            indexButton.disabled = false;
-            indexButton.dataset.url = url;
-            showStatus(indexStatus, "Ready to index this video ✨", "success");
+            // Only enable the button if there's no ongoing operation
+            chrome.storage.local.get(['ongoingOperation'], (result) => {
+                if (!result.ongoingOperation) {
+                    indexButton.disabled = false;
+                    indexButton.dataset.url = url;
+                    showStatus(indexStatus, "Ready to index this video ✨", "success");
+                }
+            });
         } else {
             console.log('[YT-RAG] Not a valid video page');
             showStatus(indexStatus, "Please navigate to a YouTube video", "error");
@@ -71,15 +113,29 @@ document.addEventListener('DOMContentLoaded', () => {
         
         indexStatus.textContent = statusText;
         
-        if (status.status === 'completed') {
+        // Save the last status
+        chrome.storage.local.get(['ongoingOperation'], (result) => {
+            if (result.ongoingOperation) {
+                const updatedOperation = {
+                    ...result.ongoingOperation,
+                    lastStatus: status
+                };
+                chrome.storage.local.set({ ongoingOperation: updatedOperation });
+            }
+        });
+        
+        if (status.status === 'completed' || status.status === 'failed') {
             clearInterval(statusCheckInterval);
+            // Clear the ongoing operation from storage
+            chrome.storage.local.remove('ongoingOperation', () => {
+                console.log('[YT-RAG] Operation completed or failed, removed from storage');
+            });
+            
             setTimeout(() => {
                 indexButton.disabled = false;
             }, 2000);
-        } else if (status.status === 'failed') {
-            clearInterval(statusCheckInterval);
-            indexButton.disabled = false;
-            if (status.error) {
+            
+            if (status.status === 'failed' && status.error) {
                 console.error('Indexing error:', status.error);
             }
         }
@@ -98,6 +154,11 @@ document.addEventListener('DOMContentLoaded', () => {
             clearInterval(statusCheckInterval);
             indexButton.disabled = false;
             showStatus(indexStatus, "Error checking status", "error");
+            
+            // Clear the ongoing operation on error
+            chrome.storage.local.remove('ongoingOperation', () => {
+                console.log('[YT-RAG] Error checking status, removed operation from storage');
+            });
         }
     }
     
@@ -121,6 +182,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             
             if (response.ok) {
+                // Save operation ID to Chrome storage
+                const operation = {
+                    id: data.operation_id,
+                    startTime: Date.now(),
+                    videoUrl: url
+                };
+                
+                chrome.storage.local.set({ ongoingOperation: operation }, () => {
+                    console.log('[YT-RAG] Saved operation to storage:', operation);
+                });
+                
                 // Start polling for status updates
                 statusCheckInterval = setInterval(() => {
                     checkIndexingStatus(data.operation_id);

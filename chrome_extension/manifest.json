@@ -5,7 +5,8 @@
   "description": "Index YouTube video transcripts for semantic search",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "http://localhost:5000/*"

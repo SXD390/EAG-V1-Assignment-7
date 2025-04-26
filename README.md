@@ -87,10 +87,10 @@ sequenceDiagram
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/yourusername/yt_rag.git
+git clone https://github.com/SXD390/EAG-V1-Assignment-7.git
 cd yt_rag
 python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
+source venv/bin/activate  # or venv\Scripts\activate on Windows (complications regarding using FAISS in GPU mode will arise, use conda with py version = 3.10)
 pip install -r requirements.txt
 ```
 
@@ -195,17 +195,6 @@ The agent loops through these steps, using retrieved transcript data and LLM rea
 
 ---
 
-## 🎨 Screenshots
-
-> _Add screenshots of the extension popup, API responses, and example answers here!_
-
----
-
-## 🤝 Contributing
-
-PRs and issues welcome! See `CONTRIBUTING.md` (if you add one).
-
----
 
 ## 📄 License
 

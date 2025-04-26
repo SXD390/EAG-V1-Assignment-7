@@ -4,6 +4,8 @@
   <title>YouTube Transcript Indexer</title>
   <link rel="stylesheet" href="css/highlight.css">
   <link rel="stylesheet" href="css/markdown.css">
+  <link rel="stylesheet" href="css/popup.css">
+  <link rel="stylesheet" href="css/content.css">
   <style>
     body {
       width: 450px;
@@ -238,6 +240,81 @@
       padding-left: 15px;
       color: rgba(255, 255, 255, 0.7);
     }
+
+    .collapsible-section {
+      background: rgba(20, 25, 45, 0.5);
+      padding: 20px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(77, 121, 255, 0.15);
+      margin-bottom: 20px;
+    }
+
+    .collapsible-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      padding-bottom: 10px;
+    }
+
+    .collapsible-header h3 {
+      margin: 0;
+      font-size: 18px;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .toggle-icon {
+      transition: transform 0.3s ease;
+      color: #4d79ff;
+      font-size: 14px;
+    }
+
+    .collapsible-content {
+      display: none;
+      margin-top: 15px;
+      max-width: 100%;
+      overflow: hidden;
+      border-top: 1px solid rgba(77, 121, 255, 0.1);
+      padding-top: 15px;
+    }
+
+    .loading-indicator {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.6);
+      font-style: italic;
+      margin: 15px 0;
+    }
+
+    .video-list {
+      margin-top: 12px;
+      max-height: 250px;
+      overflow-y: auto;
+      padding-right: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    .no-videos {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.7);
+      margin: 20px 0;
+      font-style: italic;
+      padding: 15px;
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+    }
+    
+    .error-message {
+      color: #ff6b6b;
+      text-align: center;
+      margin: 15px 0;
+      padding: 10px;
+      background: rgba(255, 107, 107, 0.1);
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
@@ -250,6 +327,19 @@
       <h3>Index Video</h3>
       <button id="indexButton" disabled>Index Current Video</button>
       <div id="indexStatus" class="status"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section collapsible-section">
+      <div class="collapsible-header" id="indexedVideosHeader">
+        <h3>Indexed Videos</h3>
+        <span class="toggle-icon">&#8659;	</span>
+      </div>
+      <div class="collapsible-content" id="indexedVideosContent">
+        <div class="loading-indicator">Loading videos...</div>
+        <div class="video-list" id="videoList"></div>
+      </div>
     </div>
 
     <div class="divider"></div>

@@ -8,4 +8,199 @@
     color: #065fd4;
     cursor: pointer;
     text-decoration: underline;
+}
+
+.video-item {
+    padding: 14px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: rgba(30, 35, 60, 0.8);
+    border: 1px solid rgba(120, 160, 255, 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    padding-left: 35px;  /* Make room for the enumeration */
+}
+
+.video-item:hover {
+    background: rgba(40, 45, 80, 0.8);
+    border-color: rgba(120, 160, 255, 0.6);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.video-number {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(120, 160, 255, 0.3);
+    color: #ffffff;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.video-title-link {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: #78a0ff;
+    background: none;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    text-decoration: underline dotted;
+    display: inline-block;
+    line-height: 1.4;
+    transition: color 0.2s, background 0.2s;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+.video-title-link:hover, .video-title-link:focus {
+    color: #a0c8ff;
+    background: rgba(120, 160, 255, 0.08);
+    outline: 2px solid #a0c8ff;
+    text-decoration: underline;
+}
+
+.video-title-link:active {
+    color: #ffffff;
+    background: rgba(120, 160, 255, 0.18);
+}
+
+.video-meta {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);  /* Lighter color for better visibility */
+    margin-top: 5px;
+}
+
+.video-details {
+    margin-bottom: 4px;
+}
+
+.video-link {
+    color: #4d79ff;
+    text-decoration: none;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: rgba(77, 121, 255, 0.15);
+    transition: background 0.2s ease;
+    display: inline-block;
+    margin-top: 5px;
+}
+
+.video-link:hover {
+    background: rgba(77, 121, 255, 0.3);
+    color: #ffffff;
+}
+
+.video-list {
+    max-height: 250px;
+    overflow-y: auto;
+    padding-right: 8px;
+    margin-top: 15px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Custom scrollbar for video list */
+.video-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.video-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.video-list::-webkit-scrollbar-thumb {
+    background: rgba(120, 160, 255, 0.3);
+    border-radius: 10px;
+}
+
+.video-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(120, 160, 255, 0.5);
+}
+
+.video-content {
+    width: 100%;
+}
+
+.video-table-wrapper {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    margin-bottom: 10px;
+    background: rgba(30, 35, 60, 0.95);
+    border: 3px solid #fff;
+}
+
+.video-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: none;
+}
+
+.video-table th, .video-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border: 2px solid #fff;
+}
+
+.video-table th {
+    background: rgba(77, 121, 255, 0.18);
+    color: #a0c8ff;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.video-table tr {
+    transition: background 0.2s;
+}
+
+.video-table tbody tr:nth-child(even) {
+    background: rgba(77, 121, 255, 0.07);
+}
+
+.video-table tbody tr:hover {
+    background: rgba(120, 160, 255, 0.13);
+}
+
+.video-title-table-link {
+    color: #ffb347;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline dotted;
+    background: none;
+    border: none;
+    outline: none;
+    border-radius: 4px;
+    padding: 2px 4px;
+    transition: color 0.2s, background 0.2s;
+    display: inline-block;
+}
+
+.video-title-table-link:hover, .video-title-table-link:focus {
+    color: #fffbe7;
+    background: #ffb34733;
+    outline: 2px solid #ffb347;
+    text-decoration: underline;
+}
+
+.video-title-table-link:active {
+    color: #ffffff;
+    background: #ffb34766;
+}
+
+.video-table td {
+    color: #e6e6e6;
 } 

@@ -9,6 +9,7 @@ from flask_cors import CORS
 from typing import Dict, Any, Optional
 import time
 from datetime import datetime
+import json
 
 # Import PADM components
 from perception import Perception
@@ -424,6 +425,59 @@ def query():
         }
         logger.debug(f"Returning error response: {detailed_error}")
         return jsonify(detailed_error), 500
+
+@app.route('/list_indexed_videos', methods=['GET'])
+def list_indexed_videos():
+    """Endpoint to list all indexed videos without duplicates."""
+    logger.debug("list_indexed_videos endpoint called")
+    try:
+        transcripts_dir = Path("data/transcripts")
+        videos = []
+        video_ids = set()  # To track already processed videos
+        
+        # Get all transcript files
+        transcript_files = list(transcripts_dir.glob("transcript_*.json"))
+        logger.debug(f"Found {len(transcript_files)} transcript files")
+        
+        for file_path in transcript_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.loads(f.read())
+                    
+                    video_id = data.get("video_id")
+                    if video_id and video_id not in video_ids:
+                        metadata = data.get("metadata", {})
+                        videos.append({
+                            "video_id": video_id,
+                            "title": metadata.get("title", "Unknown"),
+                            "url": f"https://www.youtube.com/watch?v={video_id}",
+                            "author": metadata.get("author", "Unknown"),
+                            "thumbnail_url": metadata.get("thumbnail_url", ""),
+                            "length": metadata.get("length", 0),  # Duration in seconds
+                            "views": metadata.get("views", 0)
+                        })
+                        video_ids.add(video_id)
+            except Exception as e:
+                logger.warning(f"Error processing transcript file {file_path}: {str(e)}")
+                continue
+        
+        # Sort by title
+        videos.sort(key=lambda x: x["title"])
+        
+        logger.debug(f"Returning {len(videos)} unique indexed videos")
+        return jsonify({
+            "status": "success",
+            "count": len(videos),
+            "videos": videos
+        })
+        
+    except Exception as e:
+        logger.error(f"Error listing indexed videos: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": str(e),
+            "status": "error"
+        }), 500
 
 if __name__ == "__main__":
     logger.info("Starting YouTube RAG Agent")

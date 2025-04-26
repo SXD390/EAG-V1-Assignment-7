@@ -54,8 +54,8 @@ class StatusTracker:
         
         with self._lock:
             status_data = self.operations[operation_id].copy()
-            # Calculate elapsed time
-            elapsed = status_data["current_time"] - status_data["start_time"]
+            # Calculate elapsed time using current time instead of stored current_time
+            elapsed = time.time() - status_data["start_time"]
             status_data["elapsed_seconds"] = round(elapsed, 1)
             return status_data
     

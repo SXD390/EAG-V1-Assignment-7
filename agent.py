@@ -25,10 +25,12 @@ logging.basicConfig(
     level=logging.DEBUG,  # Changed to DEBUG for more verbose logging
     format='[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('yt_rag_debug.log')  # Also log to file
+        logging.StreamHandler(),  # Only log to stdout
     ]
 )
+
+# Create logger instance for the agent module
+logger = logging.getLogger("yt_rag.agent")
 
 def log(stage: str, msg: str):
     """Log a message with timestamp and stage"""

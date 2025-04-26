@@ -1,80 +1,90 @@
-# YouTube Transcript RAG
+# YouTube Transcript RAG System
 
-A Chrome extension and local server that enables semantic search over YouTube video transcripts using RAG (Retrieval-Augmented Generation) and the PADM (Perception-Agent-Decision-Memory) architecture.
+A Retrieval-Augmented Generation (RAG) system for YouTube videos using the PADM (Perception-Action-Decision-Memory) architecture.
 
-## Features
+## Project Structure
 
-- Chrome extension for easy video indexing
-- Semantic search over video transcripts
-- Time-stamped results linking directly to video segments
-- Local FAISS index for fast similarity search
-- Gemini AI for natural language understanding and response generation
+The project follows the PADM architecture for agentic systems:
 
-## Architecture
-
-The project follows the PADM architecture:
-
-- **Perception**: Analyzes user queries to understand intent and extract entities
-- **Agent**: Orchestrates the interaction between components
-- **Decision**: Generates natural language responses based on retrieved content
-- **Memory**: Manages transcript storage and retrieval using FAISS
-
-## Setup
-
-1. Install Python dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-2. Set up environment variables:
-Create a `.env` file with:
-```
-GEMINI_API_KEY=your_key_here
-```
-
-3. Install the Chrome extension:
-- Open Chrome and go to `chrome://extensions/`
-- Enable "Developer mode"
-- Click "Load unpacked" and select the `chrome_extension` directory
-
-4. Start the local server:
-```bash
-python server/app.py
-```
-
-## Usage
-
-1. Navigate to any YouTube video
-2. Click the extension icon
-3. Click "Index Current Video" to add it to your local index
-4. Use the search box to ask questions about indexed videos
-5. Results will include direct links to relevant video segments
+- **Perception**: Extracts intent and entities from user queries
+- **Memory**: Retrieves relevant transcript chunks using semantic search
+- **Decision**: Generates responses based on perception and memory
+- **Action**: Formats the final response with sources
 
 ## Components
 
-- `server/`: Flask server for handling indexing and queries
-- `agent/`: PADM architecture implementation
-- `utils/`: Utility functions for transcript processing and indexing
-- `chrome_extension/`: Browser extension for user interface
-- `data/`: Storage for transcripts and FAISS index
+- `agent.py`: Main agent with integrated Flask server
+- `perception.py`: Query intent extraction
+- `memory.py`: Transcript retrieval
+- `decision.py`: Response generation
+- `action.py`: Result formatting
+- `models.py`: Data models
+- `mcp_server.py`: MCP tools for transcript search and indexing
+- `utils/transcript_manager.py`: Core transcript handling functionality
+- `utils/status_tracker.py`: Indexing operation status tracking
 
-## Requirements
+## Setup
 
-- Python 3.8+
-- Chrome browser
-- Local Ollama server running with nomic-embed-text model
-- Google Gemini API key
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Development
+2. Create a `.env` file with your Gemini API key:
+   ```
+   GEMINI_API_KEY=your_api_key_here
+   ```
 
-To modify the extension:
-1. Make changes to files in `chrome_extension/`
-2. Reload the extension in Chrome
+3. Start the Ollama server for embeddings (requires [Ollama](https://ollama.ai/)):
+   ```bash
+   ollama run nomic-embed-text
+   ```
 
-To modify the server:
-1. Update relevant Python files
-2. Restart the Flask server
+## Usage
 
-## License
+### Starting the Agent Server
 
-MIT 
+```bash
+python agent.py
+```
+
+The server runs on http://localhost:5000 by default.
+
+### Using the Chrome Extension
+
+1. Navigate to the `chrome_extension` directory.
+2. Load the extension in Chrome's developer mode.
+3. Go to a YouTube video and use the extension to:
+   - Index the current video transcript
+   - Query indexed transcripts
+
+## API Endpoints
+
+- `POST /index_video`: Index a YouTube video transcript
+  ```json
+  {
+    "url": "https://www.youtube.com/watch?v=VIDEO_ID"
+  }
+  ```
+
+- `GET /indexing_status/<operation_id>`: Get indexing status
+
+- `POST /query`: Query indexed transcripts
+  ```json
+  {
+    "query": "What does the video talk about?"
+  }
+  ```
+
+## MCP Tools (optional)
+
+You can also run the MCP tools server for programmatic access:
+
+```bash
+python mcp_server.py
+```
+
+Available tools:
+- `search_transcripts`: Search indexed transcripts
+- `index_video`: Index a YouTube video
+- `get_indexing_status`: Get operation status 

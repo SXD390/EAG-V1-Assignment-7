@@ -1,16 +1,18 @@
-from enum import Enum
 import time
 from typing import Dict, Optional
 import uuid
 from threading import Lock
+import sys
+import os
+import logging
 
-class IndexingStatus(Enum):
-    PENDING = "pending"
-    FETCHING_METADATA = "fetching_metadata"
-    FETCHING_TRANSCRIPT = "fetching_transcript"
-    INDEXING = "indexing"
-    COMPLETED = "completed"
-    FAILED = "failed"
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from models import IndexingStatus
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(message)s")
+logger = logging.getLogger("yt_rag.status_tracker")
 
 class StatusTracker:
     def __init__(self):
@@ -43,6 +45,7 @@ class StatusTracker:
                 "message": message,
                 "error": error
             })
+            logger.info(f"Status updated: {operation_id} -> {status.value}: {message}")
     
     def get_status(self, operation_id: str) -> Dict:
         """Get the current status of an operation."""
@@ -66,4 +69,6 @@ class StatusTracker:
                     to_remove.append(op_id)
             
             for op_id in to_remove:
-                del self.operations[op_id] 
+                del self.operations[op_id]
+            
+            logger.info(f"Cleaned up {len(to_remove)} old operations") 

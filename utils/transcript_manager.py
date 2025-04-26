@@ -233,6 +233,5 @@ class TranscriptManager:
         results = []
         for idx in I[0]:
             if idx < len(self.metadata):
-                results.append(self.metadata[idx])
-                
+                results.append(self.metadata[idx])        
         return results 

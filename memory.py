@@ -1,29 +1,49 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 import logging
 import time
 import json
+import faiss
+import numpy as np
+import requests
+from datetime import datetime
+from pathlib import Path
 from models import PerceptionResult, MemoryItem, VideoSegment
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s")
 logger = logging.getLogger("yt_rag.memory")
 
+def log(stage: str, msg: str):
+    """Log a message with timestamp and stage"""
+    now = datetime.now().strftime("%H:%M:%S")
+    logger.debug(f"[{now}] [{stage}] {msg}")
+
 class Memory:
-    """Store and retrieve information from the current video context and past interactions."""
+    """Store and retrieve information from indexed videos and past interactions."""
     
     def __init__(self, transcript_manager):
         """Initialize memory with transcript manager."""
-        logger.debug("Initializing Memory component")
+        log("memory", "Initializing Memory component")
         self.transcript_manager = transcript_manager
-        self.current_video_id = None
-        self.current_segments = []
         self.conversation_history = []
-        logger.debug("Memory component initialized")
+        self.embedding_url = "http://localhost:11434/api/embeddings"
+        self.embedding_model = "nomic-embed-text"
+        self.index = None
+        self.memory_items = []
+        log("memory", "Memory component initialized")
+    
+    def _get_embedding(self, text: str) -> np.ndarray:
+        """Get embedding for text using local model."""
+        response = requests.post(
+            self.embedding_url,
+            json={"model": self.embedding_model, "prompt": text}
+        )
+        response.raise_for_status()
+        return np.array(response.json()["embedding"], dtype=np.float32)
         
     def retrieve(self, perception: PerceptionResult) -> List[MemoryItem]:
         """
         Retrieve memory items relevant to the perception result.
-        This is a wrapper around get_memory_items for compatibility with the agent.py interface.
         
         Args:
             perception: PerceptionResult containing query and intent
@@ -31,50 +51,74 @@ class Memory:
         Returns:
             List of MemoryItem objects
         """
-        logger.info(f"Retrieving memory items for perception: {perception.intent}")
-        return self.get_memory_items(perception.query)
+        log("memory", f"Retrieving memory items for perception: {perception.intent}")
+        query = perception.query
         
-    def set_video_context(self, video_id: str) -> bool:
+        # First, search for relevant video segments
+        segments = self.search_relevant_segments(query, top_k=5)
+        memory_items = []
+        
+        # Add video segments as memory item
+        if segments:
+            memory_items.append(MemoryItem(
+                type="video_segments",
+                content=segments
+            ))
+            
+        # Add recent conversation history
+        recent_history = self.get_recent_interactions(3)
+        if recent_history:
+            memory_items.append(MemoryItem(
+                type="conversation_history",
+                content=recent_history
+            ))
+            
+        log("memory", f"Retrieved {len(memory_items)} memory items with {len(segments)} video segments")
+        return memory_items
+    
+    def retrieve_by_query(self, query: str, top_k: int = 3, session_filter: Optional[str] = None) -> List[MemoryItem]:
         """
-        Set the current video context and load its segments.
+        Alternative retrieve method that allows filtering by session ID.
         
         Args:
-            video_id: YouTube video ID
+            query: Search query
+            top_k: Number of results to return
+            session_filter: Optional session ID to filter by
             
         Returns:
-            Success state (bool)
+            List of MemoryItem objects
         """
-        logger.info(f"Setting video context: {video_id}")
-        start_time = time.time()
+        # If we have no memory items, just return an empty list
+        if not self.memory_items:
+            return []
+            
+        log("memory", f"Memory retrieval for: {query}")
+        query_vec = self._get_embedding(query).reshape(1, -1)
         
-        if not video_id:
-            logger.warning("Attempted to set empty video ID")
-            return False
+        if self.index is None:
+            log("memory", "No memory index available yet")
+            return []
             
-        if video_id == self.current_video_id:
-            logger.debug(f"Video {video_id} is already the current context")
-            return True
-            
-        try:
-            logger.debug(f"Loading segments for video: {video_id}")
-            segments = self.transcript_manager.load_segments(video_id)
-            
-            if not segments:
-                logger.warning(f"No segments found for video: {video_id}")
-                return False
+        # Search index
+        D, I = self.index.search(query_vec, top_k * 2)  # Overfetch to allow filtering
+        
+        results = []
+        for idx in I[0]:
+            if idx >= len(self.memory_items):
+                continue
                 
-            self.current_video_id = video_id
-            self.current_segments = segments
-            segments_count = len(segments) if segments else 0
-            logger.debug(f"Loaded {segments_count} segments for video {video_id}")
+            item = self.memory_items[idx]
             
-            end_time = time.time()
-            logger.debug(f"Video context set in {end_time - start_time:.3f} seconds")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error setting video context: {str(e)}", exc_info=True)
-            return False
+            # Filter by session
+            if session_filter and hasattr(item, 'session_id') and item.session_id != session_filter:
+                continue
+                
+            results.append(item)
+            if len(results) >= top_k:
+                break
+                
+        log("memory", f"Retrieved {len(results)} memory items")
+        return results
             
     def search_relevant_segments(self, query: str, top_k: int = 5) -> List[VideoSegment]:
         """
@@ -88,26 +132,22 @@ class Memory:
             List of relevant VideoSegment objects
         """
         if not query:
-            logger.warning("Empty query provided for search")
+            log("memory", "Empty query provided for search")
             return []
             
-        if not self.current_video_id:
-            logger.warning("No video context set for search")
-            return []
-            
-        logger.info(f"Searching for segments matching query: '{query}'")
+        log("memory", f"Searching for segments matching query: '{query}'")
         start_time = time.time()
         
         try:
-            logger.debug(f"Performing search with top_k={top_k}")
-            results = self.transcript_manager.search(query, top_k=top_k)
+            log("memory", f"Performing search with top_k={top_k}")
+            results = self.transcript_manager.search(query, k=top_k)
             
             if not results:
-                logger.warning(f"No results found for query: '{query}'")
+                log("memory", f"No results found for query: '{query}'")
                 return []
                 
             result_count = len(results)
-            logger.debug(f"Search returned {result_count} results")
+            log("memory", f"Search returned {result_count} results")
             
             # Convert raw results to VideoSegment objects
             video_segments = []
@@ -124,47 +164,57 @@ class Memory:
                     )
                     video_segments.append(segment)
                 except Exception as e:
-                    logger.error(f"Error creating VideoSegment from result: {e}")
-            
-            # Log sample of results
-            if result_count > 0:
-                sample_size = min(3, result_count)
-                sample = video_segments[:sample_size]
-                for i, segment in enumerate(sample):
-                    logger.debug(f"Result {i+1}: Score={segment.score:.4f}, Time={segment.start_time}s-{segment.end_time}s")
-                    logger.debug(f"Text snippet: '{segment.text[:100]}...'")
+                    log("memory", f"Error creating VideoSegment from result: {e}")
             
             end_time = time.time()
-            logger.debug(f"Search completed in {end_time - start_time:.3f} seconds")
+            log("memory", f"Search completed in {end_time - start_time:.3f} seconds")
             return video_segments
             
         except Exception as e:
-            logger.error(f"Error during search: {str(e)}", exc_info=True)
+            log("memory", f"Error during search: {str(e)}")
             return []
             
-    def add_interaction(self, query: str, response: str) -> None:
+    def add_interaction(self, interaction: Dict[str, Any]) -> None:
         """
-        Add user interaction to conversation history.
+        Add user interaction or tool result to memory.
         
         Args:
-            query: User query
-            response: System response
+            interaction: Dict with interaction data
         """
-        logger.debug(f"Adding interaction to history: Query='{query[:50]}...'")
+        log("memory", f"Adding interaction of type: {interaction.get('type', 'unknown')}")
         
-        if not query or not response:
-            logger.warning("Attempted to add empty interaction to history")
+        if not interaction:
+            log("memory", "Attempted to add empty interaction")
             return
             
-        interaction = {
-            "query": query,
-            "response": response,
-            "timestamp": time.time()
-        }
-        
+        # Store in conversation history for MemoryItem retrieval
+        if 'type' not in interaction:
+            interaction['type'] = 'fact'
+            
+        # Add timestamp if not present
+        if 'timestamp' not in interaction:
+            interaction['timestamp'] = datetime.now().isoformat()
+            
+        # Create embedding and add to index
+        try:
+            text = interaction.get('text', '')
+            if text:
+                emb = self._get_embedding(text)
+                
+                # Initialize or add to index
+                if self.index is None:
+                    self.index = faiss.IndexFlatL2(len(emb))
+                    
+                self.index.add(np.stack([emb]))
+                self.memory_items.append(interaction)
+                log("memory", f"Added interaction to memory index, now {len(self.memory_items)} items")
+        except Exception as e:
+            log("memory", f"Error adding interaction to memory: {e}")
+            
+        # Also add to conversation history
         self.conversation_history.append(interaction)
         history_length = len(self.conversation_history)
-        logger.debug(f"Conversation history updated, now contains {history_length} interactions")
+        log("memory", f"Conversation history updated, now contains {history_length} interactions")
         
     def get_recent_interactions(self, count: int = 3) -> List[Dict[str, Any]]:
         """
@@ -176,74 +226,15 @@ class Memory:
         Returns:
             List of recent interactions
         """
-        logger.debug(f"Retrieving {count} recent interactions")
+        log("memory", f"Retrieving {count} recent interactions")
         history_length = len(self.conversation_history)
         
         if history_length == 0:
-            logger.debug("Conversation history is empty")
+            log("memory", "Conversation history is empty")
             return []
             
         # Get the last 'count' interactions
         recent = self.conversation_history[-count:] if count < history_length else self.conversation_history
-        logger.debug(f"Retrieved {len(recent)} recent interactions")
+        log("memory", f"Retrieved {len(recent)} recent interactions")
         
-        return recent
-        
-    def get_memory_items(self, query: str, max_segments: int = 5) -> List[MemoryItem]:
-        """
-        Get memory items relevant to the current query.
-        
-        Args:
-            query: User query
-            max_segments: Maximum number of segments to include
-            
-        Returns:
-            List of MemoryItem objects
-        """
-        logger.info(f"Getting memory items for query: '{query}'")
-        start_time = time.time()
-        
-        memory_items = []
-        
-        # Get relevant video segments
-        logger.debug("Searching for relevant video segments")
-        segments_start = time.time()
-        relevant_segments = self.search_relevant_segments(query, top_k=max_segments)
-        segments_end = time.time()
-        
-        logger.debug(f"Found {len(relevant_segments)} relevant segments in {segments_end - segments_start:.3f} seconds")
-        
-        if relevant_segments:
-            # Create memory item for video context
-            video_memory = MemoryItem(
-                type="video_segments",
-                content=relevant_segments
-            )
-            memory_items.append(video_memory)
-            
-            # Log some details about the segments
-            total_duration = sum(s.end_time - s.start_time for s in relevant_segments)
-            total_text_length = sum(len(s.text) for s in relevant_segments)
-            logger.debug(f"Video segments cover {total_duration:.1f} seconds with {total_text_length} characters")
-        
-        # Get recent conversation history
-        logger.debug("Retrieving recent conversation history")
-        history_start = time.time()
-        recent_interactions = self.get_recent_interactions(count=3)
-        history_end = time.time()
-        
-        logger.debug(f"Retrieved {len(recent_interactions)} recent interactions in {history_end - history_start:.3f} seconds")
-        
-        if recent_interactions:
-            # Create memory item for conversation history
-            history_memory = MemoryItem(
-                type="conversation_history",
-                content=recent_interactions
-            )
-            memory_items.append(history_memory)
-        
-        end_time = time.time()
-        logger.debug(f"Memory items retrieval completed in {end_time - start_time:.3f} seconds")
-        logger.debug(f"Returning {len(memory_items)} memory items")
-        
-        return memory_items 
+        return recent 

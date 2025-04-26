@@ -18,7 +18,8 @@ from action import Action
 from models import IndexingStatus, SearchResult
 from utils.transcript_manager import TranscriptManager
 from utils.status_tracker import StatusTracker
-
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 # Configure logging with more detailed format
 logging.basicConfig(
     level=logging.DEBUG,  # Changed to DEBUG for more verbose logging
@@ -28,7 +29,11 @@ logging.basicConfig(
         logging.FileHandler('yt_rag_debug.log')  # Also log to file
     ]
 )
-logger = logging.getLogger("yt_rag.agent")
+
+def log(stage: str, msg: str):
+    """Log a message with timestamp and stage"""
+    now = datetime.now().strftime("%H:%M:%S")
+    logger.debug(f"[{now}] [{stage}] {msg}")
 
 class Agent:
     def __init__(self):
@@ -57,7 +62,7 @@ class Agent:
         
         logger.info("Agent initialized with all components")
 
-    def process_query(self, query: str) -> Dict[str, Any]:
+    async def process_query(self, query: str) -> Dict[str, Any]:
         """Process a user query through the PADM cycle.
         
         Args:
@@ -68,40 +73,128 @@ class Agent:
         """
         logger.info(f"Processing query: {query}")
         start_time = time.time()
-        
+        max_steps = 3
+
+        # Start up the MCP server
+        server_params = StdioServerParameters(
+            command="python",
+            args=["mcp_server.py"]
+        )
+
         try:
-            # Perception: Extract intent and entities
-            logger.debug("Starting perception phase")
-            perception_result = self.perception.extract_intent(query)
-            logger.info(f"Intent extracted: {perception_result.intent}")
-            logger.debug(f"Perception result: {perception_result}")
-            
-            # Memory: Retrieve relevant transcript chunks
-            logger.debug("Starting memory phase")
-            memory_items = self.memory.retrieve(perception_result)
-            logger.info(f"Retrieved {len(memory_items)} memory items")
-            logger.debug(f"First memory item (if any): {memory_items[0] if memory_items else 'None'}")
-            
-            # Decision: Generate response based on perception and memory
-            logger.debug("Starting decision phase")
-            response_text = self.decision.generate_response(perception_result, memory_items)
-            logger.info("Response generated")
-            logger.debug(f"Response text first 100 chars: {response_text[:100]}...")
-            
-            # Action: Format final response
-            logger.debug("Starting action phase")
-            result = self.action.format_response(response_text, memory_items)
-            logger.info("Response formatted with sources")
-            logger.debug(f"Number of sources in result: {len(result.sources)}")
-            
-            end_time = time.time()
-            logger.debug(f"Query processing completed in {end_time - start_time:.2f} seconds")
-            
-            # Convert to dict with the proper method
-            result_dict = result.model_dump()
-            logger.debug(f"Final result keys: {list(result_dict.keys())}")
-            return result_dict
-            
+            # Connect to MCP server
+            async with stdio_client(server_params) as (read, write):
+                log("agent", "Connection established, creating session...")
+                
+                async with ClientSession(read, write) as session:
+                    log("agent", "Session created, initializing...")
+                    await session.initialize()
+                    log("agent", "MCP session initialized")
+
+                    # Get available tools
+                    tools_result = await session.list_tools()
+                    tools = tools_result.tools
+                    tool_descriptions = "\n".join(
+                        f"- {tool.name}: {getattr(tool, 'description', 'No description')}" 
+                        for tool in tools
+                    )
+                    log("agent", f"{len(tools)} tools loaded")
+
+                    # Begin PADM loop
+                    step = 0
+                    session_id = f"session-{int(time.time())}"
+                    original_query = query  # Store original query for reference
+                    final_answer = None
+                    sources = []
+
+                    while step < max_steps:
+                        log("loop", f"Step {step + 1} started")
+
+                        # Perception: Extract intent and entities from query
+                        perception_result = self.perception.extract_intent(query)
+                        log("perception", f"Intent: {perception_result.intent}, Entities: {perception_result.entities}")
+
+                        # Memory: Retrieve relevant transcript chunks
+                        memory_items = self.memory.retrieve(perception_result)
+                        log("memory", f"Retrieved {len(memory_items)} memory items")
+
+                        # Decision: Generate plan based on perception and memory
+                        plan = self.decision.generate_plan(perception_result, memory_items, tool_descriptions)
+                        log("decision", f"Plan generated: {plan}")
+
+                        # Check if we have a final answer
+                        if plan.startswith("FINAL_ANSWER:"):
+                            final_answer = plan.replace("FINAL_ANSWER:", "").strip()
+                            log("agent", f"✅ FINAL RESULT: {final_answer}")
+                            break
+
+                        # Action: Execute tool if plan indicates tool use
+                        try:
+                            result = await self.action.execute_tool(session, tools, plan)
+                            log("action", f"Tool {result.tool_name} returned: {result.result}")
+
+                            # Add tool result to memory
+                            self.memory.add_interaction({
+                                "text": f"Tool call: {result.tool_name} with {result.arguments}, result: {result.result}",
+                                "type": "tool_output",
+                                "tool_name": result.tool_name,
+                                "user_query": query,
+                                "session_id": session_id
+                            })
+
+                            # Update query for next iteration
+                            query = f"Original task: {original_query}\nPrevious output: {result.result}\nWhat should I do next?"
+
+                        except Exception as e:
+                            log("error", f"Tool execution failed: {e}")
+                            traceback.print_exc()
+                            break
+
+                        step += 1
+
+                    # If no final answer was generated, use the last memory items to create one
+                    if not final_answer and memory_items:
+                        log("agent", "No final answer generated, creating one from memory items")
+                        response_text = self.decision.generate_response(perception_result, memory_items)
+                        result = self.action.format_response(response_text, memory_items)
+                        return {
+                            "status": "success",
+                            "answer": result.answer,
+                            "sources": result.sources
+                        }
+                    elif not final_answer:
+                        log("agent", "No final answer or memory items available")
+                        return {
+                            "status": "success",
+                            "answer": "I couldn't find any relevant information to answer your question.",
+                            "sources": []
+                        }
+                    else:
+                        # Format the final answer with sources
+                        sources = []
+                        for item in memory_items:
+                            if hasattr(item, 'type') and item.type == "video_segments":
+                                for segment in item.content[:5]:  # Limit to top 5 segments
+                                    sources.append({
+                                        "video_title": segment.video_title,
+                                        "url": segment.url,
+                                        "timestamp": int(segment.start_time),
+                                        "text": segment.text[:150] + "..." if len(segment.text) > 150 else segment.text
+                                    })
+
+                        log("agent", f"Found {len(sources)} sources for the answer")
+                        
+                        # Create formatted response with correct structure for frontend
+                        formatted_response = {
+                            "status": "success",
+                            "answer": final_answer,
+                            "sources": sources
+                        }
+                        
+                        end_time = time.time()
+                        log("agent", f"Query processing completed in {end_time - start_time:.2f} seconds")
+                        return formatted_response
+
         except Exception as e:
             logger.error(f"Error processing query: {str(e)}")
             logger.error(traceback.format_exc())
@@ -310,29 +403,14 @@ def query():
             return jsonify({"error": "No query provided", "status": "error"}), 400
         
         user_query = request_data['query']
-        logger.debug(f"Processing query: '{user_query}'")
         
-        # Process query through agent
-        logger.debug("Calling agent.process_query")
-        results = agent.process_query(user_query)
-        logger.debug(f"Query results: {results.keys() if isinstance(results, dict) else 'not a dict'}")
+        # Process query asynchronously
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(agent.process_query(user_query))
+        loop.close()
         
-        # Verify results structure before returning
-        if isinstance(results, dict):
-            if "error" in results:
-                logger.warning(f"Error in results: {results['error']}")
-            else:
-                logger.debug(f"Results contains keys: {results.keys()}")
-                if "answer" not in results:
-                    logger.warning("Missing 'answer' in results")
-                if "sources" not in results:
-                    logger.warning("Missing 'sources' in results")
-                    
-        # Return results with explicit content type
-        logger.debug("Returning query results")
-        response = jsonify(results)
-        logger.debug(f"Response mimetype: {response.mimetype}")
-        return response
+        return jsonify(result)
     
     except Exception as e:
         logger.error(f"Error in query endpoint: {str(e)}")

@@ -1,13 +1,14 @@
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any, Literal, Union
 from enum import Enum
 
 
 class PerceptionResult(BaseModel):
+    """Result from the Perception component"""
     query: str
-    intent: str
+    intent: Optional[str] = None
     entities: List[str] = []
-    context_needed: bool = True
+    tool_hint: Optional[str] = None
 
 
 class VideoSegment(BaseModel):
@@ -44,7 +45,7 @@ class ActionResult(BaseModel):
 class SearchResult(BaseModel):
     """Result format for search queries"""
     answer: str
-    sources: List[Dict[str, Any]]
+    sources: List[Dict[str, Any]] = []
 
 
 class IndexingStatus(str, Enum):
